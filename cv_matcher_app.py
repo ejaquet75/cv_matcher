@@ -8,6 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import openai
 from tqdm import tqdm
 import time
+import re
 
 # --- Configure OpenAI ---
 openai.api_key = st.secrets["OPENAI_API_KEY"]
@@ -59,25 +60,30 @@ def compute_openai_similarity(cv_texts, jd_text):
     scores = [dot(cv, jd_embed) / (norm(cv) * norm(jd_embed)) for cv in cv_embeds]
     return scores
 
+def extract_skills(text):
+    # Example placeholder skill keywords
+    keywords = ["python", "excel", "marketing", "sales", "sql", "data analysis"]
+    text_lower = text.lower()
+    return sum(1 for kw in keywords if kw in text_lower) / len(keywords)
+
+def estimate_experience_years(text):
+    years = re.findall(r"\b(19|20)\d{2}\b", text)
+    years = sorted(set(int(y) for y in years))
+    return max(0, (years[-1] - years[0])) if len(years) >= 2 else 0
+
 # --- Streamlit UI ---
 st.title("Geezer CV Matcher App")
 st.write("Upload a job description and multiple CVs to find the best matches.")
 
-# Upload Job Description
 jd_file = st.file_uploader("Upload Job Description (PDF)", type=["pdf"])
-
-# Upload CVs
 cv_files = st.file_uploader("Upload CVs (PDFs)", type=["pdf"], accept_multiple_files=True)
 
-# Matching Method
 method = st.radio("Choose Matching Method", ["AI-Powered Match", "TF-IDF"], index=0)
 
-# Weighted scoring sliders
 st.sidebar.header("🔧 Scoring Weights")
 skill_weight = st.sidebar.slider("AI Keyword Match", 0.0, 1.0, 1.0, 0.1)
 skills_match_weight = st.sidebar.slider("Skills Match Weight", 0.0, 1.0, 0.5, 0.1)
 years_experience_weight = st.sidebar.slider("Experience Weight", 0.0, 1.0, 0.5, 0.1)
-
 
 if jd_file and cv_files:
     with st.spinner("Processing..."):
@@ -115,21 +121,8 @@ if jd_file and cv_files:
         shortlist_flags = []
         comments = []
 
-        st.success("Matching complete!")
-        st.subheader("Review & Shortlist")
-
-        for i, name in enumerate(cv_names):
-            with st.expander(f"{name} - Match Score: {(semantic_scores[i]*100):.2f}%"):
-                is_shortlisted = st.checkbox(f"Shortlist {name}?", key=f"shortlist_{i}")
-                comment = st.text_area("Comments", key=f"comment_{i}")
-                shortlist_flags.append(is_shortlisted)
-                comments.append(comment)
-
-        # Apply weighted scoring
-        # Placeholder example: extract fake skill and experience match scores
-        # (In a real app you'd extract and compute these from CV text)
-        skill_matches = [0.8 for _ in cv_names]  # placeholder
-        experience_scores = [0.6 for _ in cv_names]  # placeholder
+        skill_matches = [extract_skills(text) for text in cv_texts]
+        experience_scores = [estimate_experience_years(text)/10 for text in cv_texts]  # normalize years
 
         final_scores = []
         for i in range(len(cv_names)):
@@ -138,19 +131,29 @@ if jd_file and cv_files:
                 skill_matches[i] * skills_match_weight +
                 experience_scores[i] * years_experience_weight
             )
-            
             final_scores.append(score)
 
         results = pd.DataFrame({
             "CV File": cv_names,
             "Match Score (%)": (pd.Series(final_scores) * 100).round(2),
+            "Skill Match Score": (pd.Series(skill_matches) * 100).round(1),
+            "Years Experience": [int(e * 10) for e in experience_scores],
             "Shortlisted": shortlist_flags,
             "Comments": comments
         }).sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
 
+        st.success("Matching complete!")
+        st.subheader("Review & Shortlist")
+
+        for i, name in enumerate(cv_names):
+            with st.expander(f"{name} - Match Score: {(final_scores[i]*100):.2f}%"):
+                is_shortlisted = st.checkbox(f"Shortlist {name}?", key=f"shortlist_{i}")
+                comment = st.text_area("Comments", key=f"comment_{i}")
+                shortlist_flags[i] = is_shortlisted
+                comments[i] = comment
+
         st.subheader("Top Matches")
         st.dataframe(results)
 
-        # Download CSV
         csv = results.to_csv(index=False).encode('utf-8')
         st.download_button("Download Full Report", csv, "cv_match_results.csv", "text/csv")
