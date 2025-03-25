@@ -7,6 +7,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import openai
 from tqdm import tqdm
+import time
 
 # --- Configure OpenAI ---
 openai.api_key = st.secrets["OPENAI_API_KEY"]
@@ -28,17 +29,28 @@ def compute_tfidf_similarity(cv_texts, jd_text):
     scores = cosine_similarity(cv_vectors, jd_vector).flatten()
     return scores
 
-def get_embedding(text, model="text-embedding-3-small"):
-    response = openai.embeddings.create(input=[text], model=model)
-    return response.data[0].embedding
+def get_embedding(text, model="text-embedding-3-small", retries=3):
+    for attempt in range(retries):
+        try:
+            response = openai.embeddings.create(input=[text], model=model)
+            return response.data[0].embedding
+        except openai.RateLimitError:
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)  # exponential backoff
+            else:
+                raise
 
 def compute_openai_similarity(cv_texts, jd_text):
     jd_embed = get_embedding(jd_text)
-    cv_embeds = [get_embedding(text) for text in tqdm(cv_texts)]
-    
+    cv_embeds = []
+    for text in tqdm(cv_texts):
+        embed = get_embedding(text)
+        cv_embeds.append(embed)
+        time.sleep(1)  # avoid rate limits
+
     from numpy import dot
     from numpy.linalg import norm
-    
+
     scores = [dot(cv, jd_embed) / (norm(cv) * norm(jd_embed)) for cv in cv_embeds]
     return scores
 
