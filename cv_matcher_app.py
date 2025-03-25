@@ -96,7 +96,7 @@ if jd_file:
     jd_text = extract_text_from_pdf(jd_file)
     top_skills = extract_top_skills_from_jd(jd_text)
     st.sidebar.markdown("### 🧠 Top JD Skills")
-    skill_tags = " ".join([f"<span style='background-color:#f0f0f0; padding:4px 8px; margin-right:4px; border-radius:6px;'>{skill}</span>" for skill in top_skills])
+    skill_tags = " ".join([f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{skill}</span>" for skill in top_skills])
     st.sidebar.markdown(f"<div style='line-height:2.2'>{skill_tags}</div>", unsafe_allow_html=True)
 
 if jd_file and cv_files:
