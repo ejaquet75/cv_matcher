@@ -55,7 +55,7 @@ def compute_openai_similarity(cv_texts, jd_text):
     return scores
 
 # --- Streamlit UI ---
-st.title("CV Matcher App")
+st.title("The Geezers CV Matcher App")
 st.write("Upload a job description and multiple CVs to find the best matches.")
 
 # Upload Job Description
