@@ -60,11 +60,9 @@ def compute_openai_similarity(cv_texts, jd_text):
     scores = [dot(cv, jd_embed) / (norm(cv) * norm(jd_embed)) for cv in cv_embeds]
     return scores
 
-def extract_skills(text):
-    # Example placeholder skill keywords
-    keywords = ["python", "excel", "marketing", "sales", "sql", "data analysis"]
+def extract_skills(text, keywords):
     text_lower = text.lower()
-    return sum(1 for kw in keywords if kw in text_lower) / len(keywords)
+    return sum(1 for kw in keywords if kw.lower() in text_lower) / len(keywords) if keywords else 0
 
 def estimate_experience_years(text):
     years = re.findall(r"\b(19\d{2}|20\d{2})\b", text)
@@ -112,7 +110,9 @@ if jd_file:
     st.sidebar.markdown(f"<div style='line-height:2.2'>{skill_tags}</div>", unsafe_allow_html=True)
 
 if jd_file and cv_files:
-    with st.spinner("Processing..."):
+    refresh = st.button("🔄 Refresh Results")
+    if refresh:
+        with st.spinner("Processing..."):
         jd_text = extract_text_from_pdf(jd_file)
         if len(jd_text.split()) > 1500:
             st.warning("Job description is long — truncating to 1500 words for semantic matching.")
@@ -147,7 +147,7 @@ if jd_file and cv_files:
         shortlist_flags = [False for _ in cv_names]
         comments = ["" for _ in cv_names]
 
-        skill_matches = [extract_skills(text) for text in cv_texts]
+        skill_matches = [extract_skills(text, selected_skills) for text in cv_texts]
         experience_scores = [estimate_experience_years(text)/10 for text in cv_texts]  # normalize years
 
         final_scores = []
