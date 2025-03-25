@@ -113,12 +113,15 @@ if jd_file and cv_files:
     refresh = st.button("🔄 Refresh Results")
     if refresh:
         with st.spinner("Processing..."):
-        jd_text = extract_text_from_pdf(jd_file)
-        if len(jd_text.split()) > 1500:
-            st.warning("Job description is long — truncating to 1500 words for semantic matching.")
+            # Indented properly under the 'with' statement
+            jd_text = extract_text_from_pdf(jd_file)
+            if len(jd_text.split()) > 1500:
+                st.warning("Job description is long — truncating to 1500 words for semantic matching.")
 
-        cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
-        cv_names = [cv.name for cv in cv_files]
+            cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
+            cv_names = [cv.name for cv in cv_files]
+
+            # Continue processing logic here (TF-IDF or AI-Powered Match)...
 
         if method == "TF-IDF":
             semantic_scores = compute_tfidf_similarity(cv_texts, jd_text)
