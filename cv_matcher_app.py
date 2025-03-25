@@ -70,7 +70,7 @@ jd_file = st.file_uploader("Upload Job Description (PDF)", type=["pdf"])
 cv_files = st.file_uploader("Upload CVs (PDFs)", type=["pdf"], accept_multiple_files=True)
 
 # Matching Method
-method = st.radio("Choose Matching Method", ["TF-IDF", "OpenAI Embeddings"], index=1)
+method = st.radio("Choose Matching Method", ["AI-Powered Match", "TF-IDF"], index=0)
 
 # Weighted scoring sliders
 st.sidebar.header("🔧 Scoring Weights")
@@ -88,8 +88,27 @@ if jd_file and cv_files:
 
         if method == "TF-IDF":
             semantic_scores = compute_tfidf_similarity(cv_texts, jd_text)
-        else:
-            semantic_scores = compute_openai_similarity(cv_texts, jd_text)
+        elif method == "AI-Powered Match":
+            try:
+                semantic_scores = compute_openai_similarity(cv_texts, jd_text)
+            except Exception as e:
+                st.error("⚠️ An error occurred while using AI-Powered Match.")
+                with st.expander("🔧 Debug Tools"):
+                    if st.button("Run Test Request"):
+                        try:
+                            test_response = openai.embeddings.create(
+                                input=["Test if OpenAI key works."],
+                                model="text-embedding-3-small"
+                            )
+                            st.success("✅ OpenAI API key is working!")
+                        except openai.RateLimitError:
+                            st.error("❌ Rate limit hit. Your API key may be over quota or too many requests were made.")
+                        except openai.AuthenticationError:
+                            st.error("❌ Invalid API key. Please check your secret.")
+                        except Exception as e:
+                            st.error(f"❌ Unexpected error: {e}")
+                    st.info("To view detailed usage, visit your OpenAI dashboard: https://platform.openai.com/account/usage")
+                raise e
 
         shortlist_flags = []
         comments = []
@@ -126,8 +145,7 @@ if jd_file and cv_files:
         csv = results.to_csv(index=False).encode('utf-8')
         st.download_button("Download Full Report", csv, "cv_match_results.csv", "text/csv")
 
-        # --- API Key Test ---
-        with st.expander("🔧 Test OpenAI API Key"):
+        :
             if st.button("Run Test Request"):
                 try:
                     test_response = openai.embeddings.create(
@@ -142,11 +160,4 @@ if jd_file and cv_files:
                 except Exception as e:
                     st.error(f"❌ Unexpected error: {e}")
 
-# Show OpenAI usage tracking
-with st.expander("📊 View OpenAI Usage"):
-    try:
-        usage = openai.Billing.usage()
-        st.write(usage)
-    except Exception as e:
-        st.info("OpenAI usage data is only available on the dashboard:")
-        st.write("https://platform.openai.com/account/usage")
+
