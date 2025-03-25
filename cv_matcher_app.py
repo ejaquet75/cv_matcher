@@ -1,13 +1,13 @@
 import streamlit as st
- import fitz  # PyMuPDF
- import os
- import tempfile
- import pandas as pd
- from sklearn.feature_extraction.text import TfidfVectorizer
- from sklearn.metrics.pairwise import cosine_similarity
- import openai
- from tqdm import tqdm
- import time
+import fitz  # PyMuPDF
+import os
+import tempfile
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import openai
+from tqdm import tqdm
+import time
  
  # --- Configure OpenAI ---
  openai.api_key = st.secrets["OPENAI_API_KEY"]
