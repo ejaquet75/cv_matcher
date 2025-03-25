@@ -118,8 +118,8 @@ if jd_file and cv_files:
                     st.info("To view detailed usage, visit your OpenAI dashboard: https://platform.openai.com/account/usage")
                 raise e
 
-        shortlist_flags = []
-        comments = []
+        shortlist_flags = [False for _ in cv_names]
+        comments = ["" for _ in cv_names]
 
         skill_matches = [extract_skills(text) for text in cv_texts]
         experience_scores = [estimate_experience_years(text)/10 for text in cv_texts]  # normalize years
@@ -133,6 +133,17 @@ if jd_file and cv_files:
             )
             final_scores.append(score)
 
+        
+
+        st.success("Matching complete!")
+        st.subheader("Review & Shortlist")
+
+        for i, name in enumerate(cv_names):
+            with st.expander(f"{name} - Match Score: {(final_scores[i]*100):.2f}%"):
+                shortlist_flags[i] = st.checkbox(f"Shortlist {name}?", key=f"shortlist_{i}")
+                comments[i] = st.text_area("Comments", key=f"comment_{i}")
+
+        # Now that we have updated shortlist_flags and comments, create the results DataFrame
         results = pd.DataFrame({
             "CV File": cv_names,
             "Match Score (%)": (pd.Series(final_scores) * 100).round(2),
@@ -141,16 +152,6 @@ if jd_file and cv_files:
             "Shortlisted": shortlist_flags,
             "Comments": comments
         }).sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
-
-        st.success("Matching complete!")
-        st.subheader("Review & Shortlist")
-
-        for i, name in enumerate(cv_names):
-            with st.expander(f"{name} - Match Score: {(final_scores[i]*100):.2f}%"):
-                is_shortlisted = st.checkbox(f"Shortlist {name}?", key=f"shortlist_{i}")
-                comment = st.text_area("Comments", key=f"comment_{i}")
-                shortlist_flags[i] = is_shortlisted
-                comments[i] = comment
 
         st.subheader("Top Matches")
         st.dataframe(results)
