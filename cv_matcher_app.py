@@ -74,8 +74,10 @@ method = st.radio("Choose Matching Method", ["AI-Powered Match", "TF-IDF"], inde
 
 # Weighted scoring sliders
 st.sidebar.header("🔧 Scoring Weights")
-skill_weight = st.sidebar.slider("Weight: Semantic Similarity", 0.0, 1.0, 1.0, 0.1)
-shortlist_weight = st.sidebar.slider("Weight: Shortlist Bonus", 0.0, 1.0, 0.0, 0.1)
+skill_weight = st.sidebar.slider("AI Keyword Match", 0.0, 1.0, 1.0, 0.1)
+skills_match_weight = st.sidebar.slider("Skills Match Weight", 0.0, 1.0, 0.5, 0.1)
+years_experience_weight = st.sidebar.slider("Experience Weight", 0.0, 1.0, 0.5, 0.1)
+
 
 if jd_file and cv_files:
     with st.spinner("Processing..."):
@@ -124,11 +126,19 @@ if jd_file and cv_files:
                 comments.append(comment)
 
         # Apply weighted scoring
+        # Placeholder example: extract fake skill and experience match scores
+        # (In a real app you'd extract and compute these from CV text)
+        skill_matches = [0.8 for _ in cv_names]  # placeholder
+        experience_scores = [0.6 for _ in cv_names]  # placeholder
+
         final_scores = []
         for i in range(len(cv_names)):
-            score = semantic_scores[i] * skill_weight
-            if shortlist_flags[i]:
-                score += shortlist_weight
+            score = (
+                semantic_scores[i] * skill_weight +
+                skill_matches[i] * skills_match_weight +
+                experience_scores[i] * years_experience_weight
+            )
+            
             final_scores.append(score)
 
         results = pd.DataFrame({
@@ -144,5 +154,3 @@ if jd_file and cv_files:
         # Download CSV
         csv = results.to_csv(index=False).encode('utf-8')
         st.download_button("Download Full Report", csv, "cv_match_results.csv", "text/csv")
-
-
