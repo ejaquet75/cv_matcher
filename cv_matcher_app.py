@@ -60,24 +60,8 @@ def compute_openai_similarity(cv_texts, jd_text):
     return scores
 
 # --- Streamlit UI ---
-st.title("CV Matcher App")
+st.title("Geezer CV Matcher App")
 st.write("Upload a job description and multiple CVs to find the best matches.")
-
-# --- API Key Test ---
-with st.expander("🔧 Test OpenAI API Key"):
-    if st.button("Run Test Request"):
-        try:
-            test_response = openai.embeddings.create(
-                input=["Test if OpenAI key works."],
-                model="text-embedding-3-small"
-            )
-            st.success("✅ OpenAI API key is working!")
-        except openai.RateLimitError:
-            st.error("❌ Rate limit hit. Your API key may be over quota or too many requests were made.")
-        except openai.AuthenticationError:
-            st.error("❌ Invalid API key. Please check your secret.")
-        except Exception as e:
-            st.error(f"❌ Unexpected error: {e}")
 
 # Upload Job Description
 jd_file = st.file_uploader("Upload Job Description (PDF)", type=["pdf"])
@@ -87,6 +71,11 @@ cv_files = st.file_uploader("Upload CVs (PDFs)", type=["pdf"], accept_multiple_f
 
 # Matching Method
 method = st.radio("Choose Matching Method", ["TF-IDF", "OpenAI Embeddings"], index=1)
+
+# Weighted scoring sliders
+st.sidebar.header("🔧 Scoring Weights")
+skill_weight = st.sidebar.slider("Weight: Semantic Similarity", 0.0, 1.0, 1.0, 0.1)
+shortlist_weight = st.sidebar.slider("Weight: Shortlist Bonus", 0.0, 1.0, 0.0, 0.1)
 
 if jd_file and cv_files:
     with st.spinner("Processing..."):
@@ -98,19 +87,66 @@ if jd_file and cv_files:
         cv_names = [cv.name for cv in cv_files]
 
         if method == "TF-IDF":
-            scores = compute_tfidf_similarity(cv_texts, jd_text)
+            semantic_scores = compute_tfidf_similarity(cv_texts, jd_text)
         else:
-            scores = compute_openai_similarity(cv_texts, jd_text)
+            semantic_scores = compute_openai_similarity(cv_texts, jd_text)
+
+        shortlist_flags = []
+        comments = []
+
+        st.success("Matching complete!")
+        st.subheader("Review & Shortlist")
+
+        for i, name in enumerate(cv_names):
+            with st.expander(f"{name} - Match Score: {(semantic_scores[i]*100):.2f}%"):
+                is_shortlisted = st.checkbox(f"Shortlist {name}?", key=f"shortlist_{i}")
+                comment = st.text_area("Comments", key=f"comment_{i}")
+                shortlist_flags.append(is_shortlisted)
+                comments.append(comment)
+
+        # Apply weighted scoring
+        final_scores = []
+        for i in range(len(cv_names)):
+            score = semantic_scores[i] * skill_weight
+            if shortlist_flags[i]:
+                score += shortlist_weight
+            final_scores.append(score)
 
         results = pd.DataFrame({
             "CV File": cv_names,
-            "Match Score (%)": (pd.Series(scores) * 100).round(2)
+            "Match Score (%)": (pd.Series(final_scores) * 100).round(2),
+            "Shortlisted": shortlist_flags,
+            "Comments": comments
         }).sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
 
-        st.success("Matching complete!")
         st.subheader("Top Matches")
         st.dataframe(results)
 
         # Download CSV
         csv = results.to_csv(index=False).encode('utf-8')
-        st.download_button("Download Results as CSV", csv, "cv_match_results.csv", "text/csv")
+        st.download_button("Download Full Report", csv, "cv_match_results.csv", "text/csv")
+
+        # --- API Key Test ---
+        with st.expander("🔧 Test OpenAI API Key"):
+            if st.button("Run Test Request"):
+                try:
+                    test_response = openai.embeddings.create(
+                        input=["Test if OpenAI key works."],
+                        model="text-embedding-3-small"
+                    )
+                    st.success("✅ OpenAI API key is working!")
+                except openai.RateLimitError:
+                    st.error("❌ Rate limit hit. Your API key may be over quota or too many requests were made.")
+                except openai.AuthenticationError:
+                    st.error("❌ Invalid API key. Please check your secret.")
+                except Exception as e:
+                    st.error(f"❌ Unexpected error: {e}")
+
+# Show OpenAI usage tracking
+with st.expander("📊 View OpenAI Usage"):
+    try:
+        usage = openai.Billing.usage()
+        st.write(usage)
+    except Exception as e:
+        st.info("OpenAI usage data is only available on the dashboard:")
+        st.write("https://platform.openai.com/account/usage")
