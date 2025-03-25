@@ -67,7 +67,7 @@ def extract_skills(text):
     return sum(1 for kw in keywords if kw in text_lower) / len(keywords)
 
 def estimate_experience_years(text):
-    years = re.findall(r"\b(19|20)\d{2}\b", text)
+    years = re.findall(r"\b(19\d{2}|20\d{2})\b", text)
     years = sorted(set(int(y) for y in years))
     return max(0, (years[-1] - years[0])) if len(years) >= 2 else 0
 
