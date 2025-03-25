@@ -15,10 +15,18 @@ openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # --- Helper Functions ---
 def extract_text_from_pdf(pdf_file):
+    if pdf_file is None:
+        raise ValueError("No file uploaded")
     text = ""
-    with fitz.open(stream=pdf_file.read(), filetype="pdf") as doc:
-        for page in doc:
-            text += page.get_text()
+    try:
+        with fitz.open(stream=pdf_file.read(), filetype="pdf") as doc:
+            for page in doc:
+                text += page.get_text()
+        if not text:
+            raise ValueError("PDF is empty or could not be read")
+    except Exception as e:
+        st.error(f"Error reading PDF file: {e}")
+        raise
     return text
 
 def truncate_text(text, max_tokens=1500):
