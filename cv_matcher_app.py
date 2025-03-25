@@ -20,6 +20,10 @@ def extract_text_from_pdf(pdf_file):
             text += page.get_text()
     return text
 
+def truncate_text(text, max_tokens=1500):
+    words = text.split()
+    return " ".join(words[:max_tokens])
+
 def compute_tfidf_similarity(cv_texts, jd_text):
     corpus = [jd_text] + cv_texts
     vectorizer = TfidfVectorizer(stop_words='english')
@@ -36,15 +40,16 @@ def get_embedding(text, model="text-embedding-3-small", retries=3):
             return response.data[0].embedding
         except openai.RateLimitError:
             if attempt < retries - 1:
-                time.sleep(2 ** attempt)  # exponential backoff
+                time.sleep(2 ** attempt)
             else:
                 raise
 
 def compute_openai_similarity(cv_texts, jd_text):
+    jd_text = truncate_text(jd_text)
     jd_embed = get_embedding(jd_text)
     cv_embeds = []
     for text in tqdm(cv_texts):
-        embed = get_embedding(text)
+        embed = get_embedding(truncate_text(text))
         cv_embeds.append(embed)
         time.sleep(1)  # avoid rate limits
 
@@ -55,7 +60,7 @@ def compute_openai_similarity(cv_texts, jd_text):
     return scores
 
 # --- Streamlit UI ---
-st.title("The Geezers CV Matcher App")
+st.title("Geezer CV Matcher App")
 st.write("Upload a job description and multiple CVs to find the best matches.")
 
 # Upload Job Description
@@ -70,6 +75,9 @@ method = st.radio("Choose Matching Method", ["TF-IDF", "OpenAI Embeddings"], ind
 if jd_file and cv_files:
     with st.spinner("Processing..."):
         jd_text = extract_text_from_pdf(jd_file)
+        if len(jd_text.split()) > 1500:
+            st.warning("Job description is long — truncating to 1500 words for semantic matching.")
+
         cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
         cv_names = [cv.name for cv in cv_files]
 
