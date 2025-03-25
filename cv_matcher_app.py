@@ -60,8 +60,24 @@ def compute_openai_similarity(cv_texts, jd_text):
     return scores
 
 # --- Streamlit UI ---
-st.title("Geezer CV Matcher App")
+st.title("CV Matcher App")
 st.write("Upload a job description and multiple CVs to find the best matches.")
+
+# --- API Key Test ---
+with st.expander("🔧 Test OpenAI API Key"):
+    if st.button("Run Test Request"):
+        try:
+            test_response = openai.embeddings.create(
+                input=["Test if OpenAI key works."],
+                model="text-embedding-3-small"
+            )
+            st.success("✅ OpenAI API key is working!")
+        except openai.RateLimitError:
+            st.error("❌ Rate limit hit. Your API key may be over quota or too many requests were made.")
+        except openai.AuthenticationError:
+            st.error("❌ Invalid API key. Please check your secret.")
+        except Exception as e:
+            st.error(f"❌ Unexpected error: {e}")
 
 # Upload Job Description
 jd_file = st.file_uploader("Upload Job Description (PDF)", type=["pdf"])
