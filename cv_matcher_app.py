@@ -60,14 +60,12 @@ def compute_openai_similarity(cv_texts, jd_text):
     scores = [dot(cv, jd_embed) / (norm(cv) * norm(jd_embed)) for cv in cv_embeds]
     return scores
 
-def extract_skills(text):
-    # Example placeholder skill keywords
-    keywords = ["python", "excel", "marketing", "sales", "sql", "data analysis"]
+def extract_skills(text, keywords):
     text_lower = text.lower()
-    return sum(1 for kw in keywords if kw in text_lower) / len(keywords)
+    return sum(1 for kw in keywords if kw.lower() in text_lower) / len(keywords) if keywords else 0
 
 def estimate_experience_years(text):
-    years = re.findall(r"\b(19|20)\d{2}\b", text)
+    years = re.findall(r"\b(19\d{2}|20\d{2})\b", text)
     years = sorted(set(int(y) for y in years))
     return max(0, (years[-1] - years[0])) if len(years) >= 2 else 0
 
@@ -79,6 +77,7 @@ def extract_top_skills_from_jd(text, top_n=10):
     tfidf_scores = tfidf_matrix.toarray()[0]
     top_indices = tfidf_scores.argsort()[::-1][:top_n]
     return [feature_array[i] for i in top_indices if tfidf_scores[i] > 0]
+
 st.title("Geezer CV Matcher App")
 st.write("Upload a job description and multiple CVs to find the best matches.")
 
@@ -96,17 +95,33 @@ if jd_file:
     jd_text = extract_text_from_pdf(jd_file)
     top_skills = extract_top_skills_from_jd(jd_text)
     st.sidebar.markdown("### 🧠 Top JD Skills")
-    skill_tags = " ".join([f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{skill}</span>" for skill in top_skills])
+
+    # Let the user edit the skills
+    selected_skills = st.sidebar.multiselect("Edit or remove detected skills:", top_skills, default=top_skills)
+    new_skill = st.sidebar.text_input("Add a new skill:")
+    if new_skill and new_skill.strip() and new_skill.lower() not in [s.lower() for s in selected_skills]:
+        selected_skills.append(new_skill.strip())
+
+    # Display skill tags
+    skill_tags = " ".join([
+        f"<span style='background-color:#c0c0c0; padding:4px 8px; margin-right:4px; border-radius:6px;'>{skill}</span>"
+        for skill in selected_skills
+    ])
     st.sidebar.markdown(f"<div style='line-height:2.2'>{skill_tags}</div>", unsafe_allow_html=True)
 
 if jd_file and cv_files:
-    with st.spinner("Processing..."):
-        jd_text = extract_text_from_pdf(jd_file)
-        if len(jd_text.split()) > 1500:
-            st.warning("Job description is long — truncating to 1500 words for semantic matching.")
+    refresh = st.button("🔄 Refresh Results")
+    if refresh:
+        with st.spinner("Processing..."):
+            # Indented properly under the 'with' statement
+            jd_text = extract_text_from_pdf(jd_file)
+            if len(jd_text.split()) > 1500:
+                st.warning("Job description is long — truncating to 1500 words for semantic matching.")
 
-        cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
-        cv_names = [cv.name for cv in cv_files]
+            cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
+            cv_names = [cv.name for cv in cv_files]
+
+            # Continue processing logic here (TF-IDF or AI-Powered Match)...
 
         if method == "TF-IDF":
             semantic_scores = compute_tfidf_similarity(cv_texts, jd_text)
@@ -135,7 +150,7 @@ if jd_file and cv_files:
         shortlist_flags = [False for _ in cv_names]
         comments = ["" for _ in cv_names]
 
-        skill_matches = [extract_skills(text) for text in cv_texts]
+        skill_matches = [extract_skills(text, selected_skills) for text in cv_texts]
         experience_scores = [estimate_experience_years(text)/10 for text in cv_texts]  # normalize years
 
         final_scores = []
@@ -147,8 +162,6 @@ if jd_file and cv_files:
             )
             final_scores.append(score)
 
-        
-
         st.success("Matching complete!")
         st.subheader("Review & Shortlist")
 
@@ -157,7 +170,6 @@ if jd_file and cv_files:
                 shortlist_flags[i] = st.checkbox(f"Shortlist {name}?", key=f"shortlist_{i}")
                 comments[i] = st.text_area("Comments", key=f"comment_{i}")
 
-        # Now that we have updated shortlist_flags and comments, create the results DataFrame
         results = pd.DataFrame({
             "CV File": cv_names,
             "Match Score (%)": (pd.Series(final_scores) * 100).round(2),
