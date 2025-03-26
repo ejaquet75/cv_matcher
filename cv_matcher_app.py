@@ -66,6 +66,15 @@ def estimate_experience_years(text):
     years = sorted(set(int(y) for y in years))
     return max(0, (years[-1] - years[0])) if len(years) >= 2 else 0
 
+# --- Extract Keywords from Job Description ---
+def extract_keywords_from_jd(text, top_n=10):
+    vectorizer = TfidfVectorizer(stop_words='english', max_features=1000)
+    tfidf_matrix = vectorizer.fit_transform([text])
+    feature_array = vectorizer.get_feature_names_out()
+    tfidf_scores = tfidf_matrix.toarray()[0]
+    top_indices = tfidf_scores.argsort()[::-1][:top_n]
+    return [feature_array[i] for i in top_indices if tfidf_scores[i] > 0]
+
 # --- Streamlit UI ---
 st.title("Geezer CV Matcher App")
 st.write("Upload a job description and multiple CVs to find the best matches.")
@@ -88,6 +97,13 @@ if jd_file and cv_files:
         jd_text = extract_text_from_pdf(jd_file)
         if len(jd_text.split()) > 1500:
             st.warning("Job description is long — truncating to 1500 words for semantic matching.")
+
+        # Extract top keywords from JD
+        top_keywords = extract_keywords_from_jd(jd_text)
+
+        # Display top keywords in the sidebar with a grey background
+        keyword_tags = " ".join([f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{keyword}</span>" for keyword in top_keywords])
+        st.sidebar.markdown(f"<div style='line-height:2.2'>{keyword_tags}</div>", unsafe_allow_html=True)
 
         cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
         cv_names = [cv.name for cv in cv_files]
