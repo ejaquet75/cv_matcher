@@ -100,16 +100,16 @@ if jd_file:
         # Extract top keywords from JD
         top_keywords = extract_keywords_from_jd(jd_text)
 
-        # Display keywords with 'X' button for removal in the sidebar
+        # Display keywords with 'X' for removal in the sidebar
         for keyword in top_keywords:
             keyword_key = f"remove_{keyword}"
             remove_button = st.sidebar.button(f"❌ {keyword}", key=keyword_key)
             if remove_button:
                 removed_keywords.append(keyword)
-        
+
         # Display the current list of remaining keywords (those that have not been removed)
         remaining_keywords = [kw for kw in top_keywords if kw not in removed_keywords]
-        keyword_tags = " ".join([f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{keyword}</span>" for keyword in remaining_keywords])
+        keyword_tags = ", ".join([f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{keyword}</span>" for keyword in remaining_keywords])
         st.sidebar.markdown(f"<div style='line-height:2.2'>{keyword_tags}</div>", unsafe_allow_html=True)
 
         # Filter JD text to remove keywords that the user wants to exclude
