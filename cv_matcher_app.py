@@ -68,12 +68,12 @@ def estimate_experience_years(text):
 
 # --- Extract Keywords from Job Description ---
 def extract_keywords_from_jd(text, top_n=10):
-    vectorizer = TfidfVectorizer(stop_words='english', max_features=1000)
-    tfidf_matrix = vectorizer.fit_transform([text])
+    # Clean the text (remove special characters and multiple spaces)
+    clean_text = ' '.join(text.split())
+    vectorizer = TfidfVectorizer(stop_words='english', max_features=top_n)
+    tfidf_matrix = vectorizer.fit_transform([clean_text])
     feature_array = vectorizer.get_feature_names_out()
-    tfidf_scores = tfidf_matrix.toarray()[0]
-    top_indices = tfidf_scores.argsort()[::-1][:top_n]
-    return [feature_array[i] for i in top_indices if tfidf_scores[i] > 0]
+    return feature_array
 
 # --- Streamlit UI ---
 st.title("Geezer CV Matcher App")
@@ -92,7 +92,8 @@ method = st.radio("Choose Matching Method", ["AI-Powered Match", "TF-IDF"], inde
 st.sidebar.header("🔧 Scoring Weights")
 skill_weight = st.sidebar.slider("Keyword Matching Weight", 0.0, 1.0, 1.0, 0.1)
 
-if jd_file and cv_files:
+# Display keywords from the Job Description once it is uploaded
+if jd_file:
     with st.spinner("Processing..."):
         jd_text = extract_text_from_pdf(jd_file)
         if len(jd_text.split()) > 1500:
@@ -105,6 +106,8 @@ if jd_file and cv_files:
         keyword_tags = " ".join([f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{keyword}</span>" for keyword in top_keywords])
         st.sidebar.markdown(f"<div style='line-height:2.2'>{keyword_tags}</div>", unsafe_allow_html=True)
 
+if jd_file and cv_files:
+    with st.spinner("Processing..."):
         cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
         cv_names = [cv.name for cv in cv_files]
 
