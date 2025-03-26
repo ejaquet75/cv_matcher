@@ -8,7 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import openai
 from tqdm import tqdm
 import time
- 
+
 # --- Configure OpenAI ---
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
@@ -144,18 +144,3 @@ if jd_file and cv_files:
         # Download CSV
         csv = results.to_csv(index=False).encode('utf-8')
         st.download_button("Download Full Report", csv, "cv_match_results.csv", "text/csv")
-
-if st.button("Run Test Request"):
-    try:
-        test_response = openai.embeddings.create(
-            input=["Test if OpenAI key works."],
-            model="text-embedding-3-small"
-        )
-        st.success("✅ OpenAI API key is working!")
-    except openai.RateLimitError:
-        st.error("❌ Rate limit hit. Your API key may be over quota or too many requests were made.")
-    except openai.AuthenticationError:
-        st.error("❌ Invalid API key. Please check your secret.")
-    except Exception as e:
-        st.error(f"❌ Unexpected error: {e}")
-                   
