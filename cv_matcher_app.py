@@ -8,6 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import openai
 from tqdm import tqdm
 import time
+import re
 
 # --- Configure OpenAI ---
 openai.api_key = st.secrets["OPENAI_API_KEY"]
@@ -59,6 +60,12 @@ def compute_openai_similarity(cv_texts, jd_text):
     scores = [dot(cv, jd_embed) / (norm(cv) * norm(jd_embed)) for cv in cv_embeds]
     return scores
 
+# --- Estimate Years of Experience ---
+def estimate_experience_years(text):
+    years = re.findall(r"\b(19\d{2}|20\d{2})\b", text)
+    years = sorted(set(int(y) for y in years))
+    return max(0, (years[-1] - years[0])) if len(years) >= 2 else 0
+
 # --- Streamlit UI ---
 st.title("Geezer CV Matcher App")
 st.write("Upload a job description and multiple CVs to find the best matches.")
@@ -85,6 +92,9 @@ if jd_file and cv_files:
 
         cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
         cv_names = [cv.name for cv in cv_files]
+
+        # Extract years of experience for each CV
+        experience_scores = [estimate_experience_years(text) for text in cv_texts]
 
         if method == "TF-IDF":
             semantic_scores = compute_tfidf_similarity(cv_texts, jd_text)
@@ -134,6 +144,7 @@ if jd_file and cv_files:
         results = pd.DataFrame({
             "CV File": cv_names,
             "Match Score (%)": (pd.Series(final_scores) * 100).round(2),
+            "Years of Experience": experience_scores,
             "Shortlisted": shortlist_flags,
             "Comments": comments
         }).sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
