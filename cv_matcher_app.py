@@ -1,12 +1,8 @@
 import streamlit as st
 import fitz  # PyMuPDF
-import os
-import tempfile
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 import openai
-from tqdm import tqdm
 import time
 import re
 
@@ -68,7 +64,6 @@ def estimate_experience_years(text):
 
 # --- Extract Keywords from Job Description ---
 def extract_keywords_from_jd(text, top_n=10):
-    # Clean the text (remove special characters and multiple spaces)
     clean_text = ' '.join(text.split())
     vectorizer = TfidfVectorizer(stop_words='english', max_features=top_n)
     tfidf_matrix = vectorizer.fit_transform([clean_text])
@@ -92,7 +87,7 @@ method = st.radio("Choose Matching Method", ["AI-Powered Match", "TF-IDF"], inde
 st.sidebar.header("🔧 Scoring Weights")
 skill_weight = st.sidebar.slider("Keyword Matching Weight", 0.0, 1.0, 1.0, 0.1)
 
-# List of removed keywords
+# Store removed keywords
 removed_keywords = []
 
 # Display keywords from the Job Description once it is uploaded
@@ -105,16 +100,17 @@ if jd_file:
         # Extract top keywords from JD
         top_keywords = extract_keywords_from_jd(jd_text)
 
-        # Display keywords with 'X' for removal
-        keyword_tags = []
+        # Display keywords with 'X' button for removal in the sidebar
         for keyword in top_keywords:
-            if st.button(f"❌ Remove {keyword}", key=keyword):
+            keyword_key = f"remove_{keyword}"
+            remove_button = st.sidebar.button(f"❌ {keyword}", key=keyword_key)
+            if remove_button:
                 removed_keywords.append(keyword)
-            else:
-                keyword_tags.append(f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{keyword}</span>")
-
-        # Display the remaining keywords
-        st.sidebar.markdown(f"<div style='line-height:2.2'>{' '.join(keyword_tags)}</div>", unsafe_allow_html=True)
+        
+        # Display the current list of remaining keywords (those that have not been removed)
+        remaining_keywords = [kw for kw in top_keywords if kw not in removed_keywords]
+        keyword_tags = " ".join([f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{keyword}</span>" for keyword in remaining_keywords])
+        st.sidebar.markdown(f"<div style='line-height:2.2'>{keyword_tags}</div>", unsafe_allow_html=True)
 
         # Filter JD text to remove keywords that the user wants to exclude
         filtered_jd_text = ' '.join([word for word in jd_text.split() if word not in removed_keywords])
