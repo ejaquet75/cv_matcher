@@ -82,7 +82,6 @@ method = st.radio("Choose Matching Method", ["AI-Powered Match", "TF-IDF"], inde
 # Weighted scoring sliders
 st.sidebar.header("🔧 Scoring Weights")
 skill_weight = st.sidebar.slider("Weight: Semantic Similarity", 0.0, 1.0, 1.0, 0.1)
-shortlist_weight = st.sidebar.slider("Weight: Shortlist Bonus", 0.0, 1.0, 0.0, 0.1)
 
 if jd_file and cv_files:
     with st.spinner("Processing..."):
@@ -137,8 +136,6 @@ if jd_file and cv_files:
         final_scores = []
         for i in range(len(cv_names)):
             score = semantic_scores[i] * skill_weight
-            if shortlist_flags[i]:
-                score += shortlist_weight
             final_scores.append(score)
 
         results = pd.DataFrame({
