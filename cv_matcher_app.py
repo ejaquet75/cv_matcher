@@ -81,7 +81,7 @@ method = st.radio("Choose Matching Method", ["AI-Powered Match", "TF-IDF"], inde
 
 # Weighted scoring sliders
 st.sidebar.header("🔧 Scoring Weights")
-skill_weight = st.sidebar.slider("Weight: Semantic Similarity", 0.0, 1.0, 1.0, 0.1)
+skill_weight = st.sidebar.slider("Keyword Matching Weight", 0.0, 1.0, 1.0, 0.1)
 
 if jd_file and cv_files:
     with st.spinner("Processing..."):
