@@ -102,8 +102,19 @@ if jd_file:
         # Extract top keywords from JD
         top_keywords = extract_keywords_from_jd(jd_text)
 
-        # Display top keywords in the sidebar with a grey background
-        keyword_tags = " ".join([f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{keyword}</span>" for keyword in top_keywords])
+        # Allow the user to remove unnecessary keywords
+        keywords_to_remove = []
+        for keyword in top_keywords:
+            # Create a checkbox with 'X' for removal
+            remove_keyword = st.checkbox(f"Remove {keyword}", key=keyword)
+            if remove_keyword:
+                keywords_to_remove.append(keyword)
+
+        # Update the list of keywords after removal
+        updated_keywords = [keyword for keyword in top_keywords if keyword not in keywords_to_remove]
+
+        # Display updated keywords in the sidebar with a grey background
+        keyword_tags = " ".join([f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{keyword}</span>" for keyword in updated_keywords])
         st.sidebar.markdown(f"<div style='line-height:2.2'>{keyword_tags}</div>", unsafe_allow_html=True)
 
 if jd_file and cv_files:
@@ -114,11 +125,14 @@ if jd_file and cv_files:
         # Extract years of experience for each CV
         experience_scores = [estimate_experience_years(text) for text in cv_texts]
 
+        # Filter out the removed keywords from JD
+        filtered_jd_text = ' '.join([word for word in jd_text.split() if word not in keywords_to_remove])
+
         if method == "TF-IDF":
-            semantic_scores = compute_tfidf_similarity(cv_texts, jd_text)
+            semantic_scores = compute_tfidf_similarity(cv_texts, filtered_jd_text)
         elif method == "AI-Powered Match":
             try:
-                semantic_scores = compute_openai_similarity(cv_texts, jd_text)
+                semantic_scores = compute_openai_similarity(cv_texts, filtered_jd_text)
             except Exception as e:
                 st.error("⚠️ An error occurred while using AI-Powered Match.")
                 with st.expander("🔧 Debug Tools"):
