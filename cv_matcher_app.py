@@ -47,6 +47,7 @@ def compute_openai_similarity(cv_texts, jd_text):
     
     jd_text = truncate_text(jd_text)
     jd_embed = get_embedding(jd_text)
+    
     if not cv_texts:
         raise ValueError("CV texts are empty or invalid.")
     
@@ -127,69 +128,75 @@ if jd_file:
 
         # Processing CVs and calculating similarity scores
         if cv_files:
-            cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
-            cv_names = [cv.name for cv in cv_files]
+            if not cv_files:
+                st.error("No CVs uploaded. Please upload at least one CV.")
+            else:
+                cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
+                cv_names = [cv.name for cv in cv_files]
 
-            # Extract years of experience for each CV
-            experience_scores = [estimate_experience_years(text) for text in cv_texts]
+                if not cv_texts or any(not cv for cv in cv_texts):
+                    st.warning("One or more CVs are empty or invalid.")
 
-            if method == "TF-IDF":
-                semantic_scores = compute_tfidf_similarity(cv_texts, filtered_jd_text)
-            elif method == "AI-Powered Match":
-                try:
-                    semantic_scores = compute_openai_similarity(cv_texts, filtered_jd_text)
-                except ValueError as ve:
-                    st.error(f"⚠️ {str(ve)}")
-                    semantic_scores = []
-                except Exception as e:
-                    st.error("⚠️ An error occurred while using AI-Powered Match.")
-                    with st.expander("🔧 Debug Tools"):
-                        if st.button("Run Test Request"):
-                            try:
-                                test_response = openai.embeddings.create(
-                                    input=["Test if OpenAI key works."],
-                                    model="text-embedding-3-small"
-                                )
-                                st.success("✅ OpenAI API key is working!")
-                            except openai.RateLimitError:
-                                st.error("❌ Rate limit hit. Your API key may be over quota or too many requests were made.")
-                            except openai.AuthenticationError:
-                                st.error("❌ Invalid API key. Please check your secret.")
-                            except Exception as e:
-                                st.error(f"❌ Unexpected error: {e}")
-                        st.info("To view detailed usage, visit your OpenAI dashboard: https://platform.openai.com/account/usage")
-                    raise e
+                # Extract years of experience for each CV
+                experience_scores = [estimate_experience_years(text) for text in cv_texts]
 
-            shortlist_flags = []
-            comments = []
+                if method == "TF-IDF":
+                    semantic_scores = compute_tfidf_similarity(cv_texts, filtered_jd_text)
+                elif method == "AI-Powered Match":
+                    try:
+                        semantic_scores = compute_openai_similarity(cv_texts, filtered_jd_text)
+                    except ValueError as ve:
+                        st.error(f"⚠️ {str(ve)}")
+                        semantic_scores = []
+                    except Exception as e:
+                        st.error("⚠️ An error occurred while using AI-Powered Match.")
+                        with st.expander("🔧 Debug Tools"):
+                            if st.button("Run Test Request"):
+                                try:
+                                    test_response = openai.embeddings.create(
+                                        input=["Test if OpenAI key works."],
+                                        model="text-embedding-3-small"
+                                    )
+                                    st.success("✅ OpenAI API key is working!")
+                                except openai.RateLimitError:
+                                    st.error("❌ Rate limit hit. Your API key may be over quota or too many requests were made.")
+                                except openai.AuthenticationError:
+                                    st.error("❌ Invalid API key. Please check your secret.")
+                                except Exception as e:
+                                    st.error(f"❌ Unexpected error: {e}")
+                            st.info("To view detailed usage, visit your OpenAI dashboard: https://platform.openai.com/account/usage")
+                        raise e
 
-            st.success("Matching complete!")
-            st.subheader("Review & Shortlist")
+                shortlist_flags = []
+                comments = []
 
-            for i, name in enumerate(cv_names):
-                with st.expander(f"{name} - Match Score: {(semantic_scores[i]*100):.2f}%"):
-                    is_shortlisted = st.checkbox(f"Shortlist {name}?", key=f"shortlist_{i}")
-                    comment = st.text_area("Comments", key=f"comment_{i}")
-                    shortlist_flags.append(is_shortlisted)
-                    comments.append(comment)
+                st.success("Matching complete!")
+                st.subheader("Review & Shortlist")
 
-            # Apply weighted scoring
-            final_scores = []
-            for i in range(len(cv_names)):
-                score = semantic_scores[i] * skill_weight
-                final_scores.append(score)
+                for i, name in enumerate(cv_names):
+                    with st.expander(f"{name} - Match Score: {(semantic_scores[i]*100):.2f}%"):
+                        is_shortlisted = st.checkbox(f"Shortlist {name}?", key=f"shortlist_{i}")
+                        comment = st.text_area("Comments", key=f"comment_{i}")
+                        shortlist_flags.append(is_shortlisted)
+                        comments.append(comment)
 
-            results = pd.DataFrame({
-                "CV File": cv_names,
-                "Match Score (%)": (pd.Series(final_scores) * 100).round(2),
-                "Years of Experience": experience_scores,
-                "Shortlisted": shortlist_flags,
-                "Comments": comments
-            }).sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
+                # Apply weighted scoring
+                final_scores = []
+                for i in range(len(cv_names)):
+                    score = semantic_scores[i] * skill_weight
+                    final_scores.append(score)
 
-            st.subheader("Top Matches")
-            st.dataframe(results)
+                results = pd.DataFrame({
+                    "CV File": cv_names,
+                    "Match Score (%)": (pd.Series(final_scores) * 100).round(2),
+                    "Years of Experience": experience_scores,
+                    "Shortlisted": shortlist_flags,
+                    "Comments": comments
+                }).sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
 
-            # Download CSV
-            csv = results.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Full Report", csv, "cv_match_results.csv", "text/csv")
+                st.subheader("Top Matches")
+                st.dataframe(results)
+
+                # Download CSV
+                csv = results.to_csv(index=False).encode('utf-8')
+                st.download_button("Download Full Report", csv, "cv_match_results.csv", "text/csv")
