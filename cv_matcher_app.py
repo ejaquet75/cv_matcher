@@ -42,18 +42,28 @@ def get_embedding(text, model="text-embedding-3-small", retries=3):
                 raise
 
 def compute_openai_similarity(cv_texts, jd_text):
+    if not jd_text:
+        raise ValueError("Job Description text is empty or invalid.")
+    
     jd_text = truncate_text(jd_text)
     jd_embed = get_embedding(jd_text)
+    if not cv_texts:
+        raise ValueError("CV texts are empty or invalid.")
+    
     cv_embeds = []
     for text in tqdm(cv_texts):
-        embed = get_embedding(truncate_text(text))
-        cv_embeds.append(embed)
+        if text:
+            embed = get_embedding(truncate_text(text))
+            cv_embeds.append(embed)
+        else:
+            st.warning("One of the CVs is empty or invalid.")
+            cv_embeds.append([])  # Handle invalid CVs
         time.sleep(1)  # avoid rate limits
 
     from numpy import dot
     from numpy.linalg import norm
 
-    scores = [dot(cv, jd_embed) / (norm(cv) * norm(jd_embed)) for cv in cv_embeds]
+    scores = [dot(cv, jd_embed) / (norm(cv) * norm(jd_embed)) if cv else 0 for cv in cv_embeds]
     return scores
 
 # --- Estimate Years of Experience ---
@@ -128,6 +138,9 @@ if jd_file:
             elif method == "AI-Powered Match":
                 try:
                     semantic_scores = compute_openai_similarity(cv_texts, filtered_jd_text)
+                except ValueError as ve:
+                    st.error(f"⚠️ {str(ve)}")
+                    semantic_scores = []
                 except Exception as e:
                     st.error("⚠️ An error occurred while using AI-Powered Match.")
                     with st.expander("🔧 Debug Tools"):
