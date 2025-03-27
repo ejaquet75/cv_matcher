@@ -49,7 +49,7 @@ def compute_openai_similarity(cv_texts, jd_text):
     jd_embed = get_embedding(jd_text)
     
     # Check if cv_texts is empty or contains invalid content
-    if not cv_texts or all(cv == "" for cv in cv_texts):
+    if not cv_texts or all(cv == "" for cv in cv_texts):  # Added check for empty CVs
         raise ValueError("CV texts are empty or invalid.")
     
     cv_embeds = []
