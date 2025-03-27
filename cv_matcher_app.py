@@ -48,12 +48,12 @@ def compute_openai_similarity(cv_texts, jd_text):
     jd_text = truncate_text(jd_text)
     jd_embed = get_embedding(jd_text)
     
-    if not cv_texts:
+    if not cv_texts or all(cv == "" for cv in cv_texts):  # Check if all CVs are empty
         raise ValueError("CV texts are empty or invalid.")
     
     cv_embeds = []
     for text in tqdm(cv_texts):
-        if text:
+        if text:  # Ensure text is not empty
             embed = get_embedding(truncate_text(text))
             cv_embeds.append(embed)
         else:
@@ -128,13 +128,15 @@ if jd_file:
 
         # Processing CVs and calculating similarity scores
         if cv_files:
+            # Check if any CVs are uploaded and contain valid text
             if not cv_files:
                 st.error("No CVs uploaded. Please upload at least one CV.")
             else:
                 cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
                 cv_names = [cv.name for cv in cv_files]
 
-                if not cv_texts or any(not cv for cv in cv_texts):
+                # Check if any CVs are empty
+                if not cv_texts or all(cv == "" for cv in cv_texts):
                     st.warning("One or more CVs are empty or invalid.")
 
                 # Extract years of experience for each CV
