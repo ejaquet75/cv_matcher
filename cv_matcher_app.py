@@ -48,12 +48,13 @@ def compute_openai_similarity(cv_texts, jd_text):
     jd_text = truncate_text(jd_text)
     jd_embed = get_embedding(jd_text)
     
-    if not cv_texts or all(cv == "" for cv in cv_texts):  # Check if all CVs are empty
+    # Check if cv_texts is empty or contains invalid content
+    if not cv_texts or all(cv == "" for cv in cv_texts):
         raise ValueError("CV texts are empty or invalid.")
     
     cv_embeds = []
     for text in tqdm(cv_texts):
-        if text:  # Ensure text is not empty
+        if text:  # Ensure the text is not empty
             embed = get_embedding(truncate_text(text))
             cv_embeds.append(embed)
         else:
