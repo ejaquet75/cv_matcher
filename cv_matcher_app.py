@@ -1,8 +1,12 @@
 import streamlit as st
 import fitz  # PyMuPDF
+import os
+import tempfile
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 import openai
+from tqdm import tqdm
 import time
 import re
 
@@ -42,30 +46,18 @@ def get_embedding(text, model="text-embedding-3-small", retries=3):
                 raise
 
 def compute_openai_similarity(cv_texts, jd_text):
-    if not jd_text:
-        raise ValueError("Job Description text is empty or invalid.")
-    
     jd_text = truncate_text(jd_text)
     jd_embed = get_embedding(jd_text)
-    
-    # Check if cv_texts is empty or contains invalid content
-    if not cv_texts or all(cv == "" for cv in cv_texts):  # Added check for empty CVs
-        raise ValueError("CV texts are empty or invalid.")
-    
     cv_embeds = []
     for text in tqdm(cv_texts):
-        if text:  # Ensure the text is not empty
-            embed = get_embedding(truncate_text(text))
-            cv_embeds.append(embed)
-        else:
-            st.warning("One of the CVs is empty or invalid.")
-            cv_embeds.append([])  # Handle invalid CVs
+        embed = get_embedding(truncate_text(text))
+        cv_embeds.append(embed)
         time.sleep(1)  # avoid rate limits
 
     from numpy import dot
     from numpy.linalg import norm
 
-    scores = [dot(cv, jd_embed) / (norm(cv) * norm(jd_embed)) if cv else 0 for cv in cv_embeds]
+    scores = [dot(cv, jd_embed) / (norm(cv) * norm(jd_embed)) for cv in cv_embeds]
     return scores
 
 # --- Estimate Years of Experience ---
@@ -73,14 +65,6 @@ def estimate_experience_years(text):
     years = re.findall(r"\b(19\d{2}|20\d{2})\b", text)
     years = sorted(set(int(y) for y in years))
     return max(0, (years[-1] - years[0])) if len(years) >= 2 else 0
-
-# --- Extract Keywords from Job Description ---
-def extract_keywords_from_jd(text, top_n=10):
-    clean_text = ' '.join(text.split())
-    vectorizer = TfidfVectorizer(stop_words='english', max_features=top_n)
-    tfidf_matrix = vectorizer.fit_transform([clean_text])
-    feature_array = vectorizer.get_feature_names_out()
-    return feature_array
 
 # --- Streamlit UI ---
 st.title("Geezer CV Matcher App")
@@ -99,107 +83,72 @@ method = st.radio("Choose Matching Method", ["AI-Powered Match", "TF-IDF"], inde
 st.sidebar.header("🔧 Scoring Weights")
 skill_weight = st.sidebar.slider("Keyword Matching Weight", 0.0, 1.0, 1.0, 0.1)
 
-# Store removed keywords
-removed_keywords = []
-
-# Display keywords from the Job Description once it is uploaded
-if jd_file:
+if jd_file and cv_files:
     with st.spinner("Processing..."):
         jd_text = extract_text_from_pdf(jd_file)
         if len(jd_text.split()) > 1500:
             st.warning("Job description is long — truncating to 1500 words for semantic matching.")
 
-        # Extract top keywords from JD
-        top_keywords = extract_keywords_from_jd(jd_text)
+        cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
+        cv_names = [cv.name for cv in cv_files]
 
-        # Display keywords with 'X' for removal in the sidebar
-        for keyword in top_keywords:
-            keyword_key = f"remove_{keyword}"
-            remove_button = st.sidebar.button(f"❌ {keyword}", key=keyword_key)
-            if remove_button:
-                removed_keywords.append(keyword)
+        # Extract years of experience for each CV
+        experience_scores = [estimate_experience_years(text) for text in cv_texts]
 
-        # Display the current list of remaining keywords (those that have not been removed)
-        remaining_keywords = [kw for kw in top_keywords if kw not in removed_keywords]
-        keyword_tags = ", ".join([f"<span style='background-color:#d9d9d9; padding:4px 8px; margin-right:4px; border-radius:6px;'>{keyword}</span>" for keyword in remaining_keywords])
-        st.sidebar.markdown(f"<div style='line-height:2.2'>{keyword_tags}</div>", unsafe_allow_html=True)
+        if method == "TF-IDF":
+            semantic_scores = compute_tfidf_similarity(cv_texts, jd_text)
+        elif method == "AI-Powered Match":
+            try:
+                semantic_scores = compute_openai_similarity(cv_texts, jd_text)
+            except Exception as e:
+                st.error("⚠️ An error occurred while using AI-Powered Match.")
+                with st.expander("🔧 Debug Tools"):
+                    if st.button("Run Test Request"):
+                        try:
+                            test_response = openai.embeddings.create(
+                                input=["Test if OpenAI key works."],
+                                model="text-embedding-3-small"
+                            )
+                            st.success("✅ OpenAI API key is working!")
+                        except openai.RateLimitError:
+                            st.error("❌ Rate limit hit. Your API key may be over quota or too many requests were made.")
+                        except openai.AuthenticationError:
+                            st.error("❌ Invalid API key. Please check your secret.")
+                        except Exception as e:
+                            st.error(f"❌ Unexpected error: {e}")
+                    st.info("To view detailed usage, visit your OpenAI dashboard: https://platform.openai.com/account/usage")
+                raise e
 
-        # Filter JD text to remove keywords that the user wants to exclude
-        filtered_jd_text = ' '.join([word for word in jd_text.split() if word not in removed_keywords])
+        shortlist_flags = []
+        comments = []
 
-        # Processing CVs and calculating similarity scores
-        if cv_files:
-            # Check if any CVs are uploaded and contain valid text
-            if not cv_files:
-                st.error("No CVs uploaded. Please upload at least one CV.")
-            else:
-                cv_texts = [extract_text_from_pdf(cv) for cv in cv_files]
-                cv_names = [cv.name for cv in cv_files]
+        st.success("Matching complete!")
+        st.subheader("Review & Shortlist")
 
-                # Check if any CVs are empty
-                if not cv_texts or all(cv == "" for cv in cv_texts):
-                    st.warning("One or more CVs are empty or invalid.")
+        for i, name in enumerate(cv_names):
+            with st.expander(f"{name} - Match Score: {(semantic_scores[i]*100):.2f}%"):
+                is_shortlisted = st.checkbox(f"Shortlist {name}?", key=f"shortlist_{i}")
+                comment = st.text_area("Comments", key=f"comment_{i}")
+                shortlist_flags.append(is_shortlisted)
+                comments.append(comment)
 
-                # Extract years of experience for each CV
-                experience_scores = [estimate_experience_years(text) for text in cv_texts]
+        # Apply weighted scoring
+        final_scores = []
+        for i in range(len(cv_names)):
+            score = semantic_scores[i] * skill_weight
+            final_scores.append(score)
 
-                if method == "TF-IDF":
-                    semantic_scores = compute_tfidf_similarity(cv_texts, filtered_jd_text)
-                elif method == "AI-Powered Match":
-                    try:
-                        semantic_scores = compute_openai_similarity(cv_texts, filtered_jd_text)
-                    except ValueError as ve:
-                        st.error(f"⚠️ {str(ve)}")
-                        semantic_scores = []
-                    except Exception as e:
-                        st.error("⚠️ An error occurred while using AI-Powered Match.")
-                        with st.expander("🔧 Debug Tools"):
-                            if st.button("Run Test Request"):
-                                try:
-                                    test_response = openai.embeddings.create(
-                                        input=["Test if OpenAI key works."],
-                                        model="text-embedding-3-small"
-                                    )
-                                    st.success("✅ OpenAI API key is working!")
-                                except openai.RateLimitError:
-                                    st.error("❌ Rate limit hit. Your API key may be over quota or too many requests were made.")
-                                except openai.AuthenticationError:
-                                    st.error("❌ Invalid API key. Please check your secret.")
-                                except Exception as e:
-                                    st.error(f"❌ Unexpected error: {e}")
-                            st.info("To view detailed usage, visit your OpenAI dashboard: https://platform.openai.com/account/usage")
-                        raise e
+        results = pd.DataFrame({
+            "CV File": cv_names,
+            "Match Score (%)": (pd.Series(final_scores) * 100).round(2),
+            "Years of Experience": experience_scores,
+            "Shortlisted": shortlist_flags,
+            "Comments": comments
+        }).sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
 
-                shortlist_flags = []
-                comments = []
+        st.subheader("Top Matches")
+        st.dataframe(results)
 
-                st.success("Matching complete!")
-                st.subheader("Review & Shortlist")
-
-                for i, name in enumerate(cv_names):
-                    with st.expander(f"{name} - Match Score: {(semantic_scores[i]*100):.2f}%"):
-                        is_shortlisted = st.checkbox(f"Shortlist {name}?", key=f"shortlist_{i}")
-                        comment = st.text_area("Comments", key=f"comment_{i}")
-                        shortlist_flags.append(is_shortlisted)
-                        comments.append(comment)
-
-                # Apply weighted scoring
-                final_scores = []
-                for i in range(len(cv_names)):
-                    score = semantic_scores[i] * skill_weight
-                    final_scores.append(score)
-
-                results = pd.DataFrame({
-                    "CV File": cv_names,
-                    "Match Score (%)": (pd.Series(final_scores) * 100).round(2),
-                    "Years of Experience": experience_scores,
-                    "Shortlisted": shortlist_flags,
-                    "Comments": comments
-                }).sort_values(by="Match Score (%)", ascending=False).reset_index(drop=True)
-
-                st.subheader("Top Matches")
-                st.dataframe(results)
-
-                # Download CSV
-                csv = results.to_csv(index=False).encode('utf-8')
-                st.download_button("Download Full Report", csv, "cv_match_results.csv", "text/csv")
+        # Download CSV
+        csv = results.to_csv(index=False).encode('utf-8')
+        st.download_button("Download Full Report", csv, "cv_match_results.csv", "text/csv")
